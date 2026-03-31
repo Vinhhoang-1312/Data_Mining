@@ -92,12 +92,12 @@ def build_tsne_fig_with_user(df_tsne: pd.DataFrame, user_tsne: tuple = None) -> 
     Parameters
     ----------
     df_tsne : pd.DataFrame
-        Must have columns 'x', 'y', 'cluster' (loaded from tsne_sample_data.csv).
+        Must have columns 'x', 'y', 'Cluster' (loaded from tsne_sample_data.csv).
     user_tsne : tuple (x, y) or None
         If provided, adds a gold star marker at those coordinates.
     """
     fig = px.scatter(
-        df_tsne, x='x', y='y', color='cluster',
+        df_tsne, x='x', y='y', color='Cluster',
         title='Taste Tribes (t-SNE 2D Projection)',
         opacity=0.6,
         color_discrete_sequence=px.colors.qualitative.Pastel
@@ -130,12 +130,12 @@ def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None) 
     Parameters
     ----------
     df_pca3d : pd.DataFrame
-        Must have columns 'x', 'y', 'z', 'cluster' (loaded from pca3d_sample.parquet).
+        Must have columns 'x', 'y', 'z', 'Cluster' (loaded from pca3d_sample.parquet).
     user_pca3d : tuple (x, y, z) or None
         If provided, adds a gold diamond marker at those coordinates.
     """
     fig_3d = px.scatter_3d(
-        df_pca3d, x='x', y='y', z='z', color='cluster',
+        df_pca3d, x='x', y='y', z='z', color='Cluster',
         title='Taste Tribes (PCA 3D Projection)',
         opacity=0.7,
         color_discrete_sequence=px.colors.qualitative.Pastel
