@@ -62,7 +62,7 @@ def apply_dimensionality_reduction(X_scaled, labels):
     df_pca_3d['Cluster'] = df_pca_3d['Cluster'].astype(str)
     
     fig_3d = px.scatter_3d(
-        df_pca_3d, x='x', y='y', z='z', color='Cluster',
+        df_pca_3d, x='x', y='y', z='z', color='Cluster' if 'Cluster' in df_pca_3d.columns else 'cluster',
         title='Taste Tribes (PCA 3D Projection)',
         opacity=0.7,
         color_discrete_sequence=px.colors.qualitative.Pastel
@@ -97,7 +97,7 @@ def build_tsne_fig_with_user(df_tsne: pd.DataFrame, user_tsne: tuple = None) -> 
         If provided, adds a gold star marker at those coordinates.
     """
     fig = px.scatter(
-        df_tsne, x='x', y='y', color='Cluster',
+        df_tsne, x='x', y='y', color='Cluster' if 'Cluster' in df_tsne.columns else 'cluster',
         title='Taste Tribes (t-SNE 2D Projection)',
         opacity=0.6,
         color_discrete_sequence=px.colors.qualitative.Pastel
@@ -135,7 +135,7 @@ def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None) 
         If provided, adds a gold diamond marker at those coordinates.
     """
     fig_3d = px.scatter_3d(
-        df_pca3d, x='x', y='y', z='z', color='Cluster',
+        df_pca3d, x='x', y='y', z='z', color='Cluster' if 'Cluster' in df_pca3d.columns else 'cluster',
         title='Taste Tribes (PCA 3D Projection)',
         opacity=0.7,
         color_discrete_sequence=px.colors.qualitative.Pastel
