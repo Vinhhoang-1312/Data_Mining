@@ -1,0 +1,55 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+.env
+.flaskenv
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Databases
+*.sqlite3
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+
+# Project Specific - Data and Large files
+ml-latest/
+data-warehousing/
+movielens-mining-group-project-main/
+
+# Artifacts - We ignore tables (parquet) but might want to keep figures/reports
+# However, usually we ignore the whole artifacts dir in Git to keep repo light.
+# If you want to push reports, you'd need to negative ignore them.
+artifacts/
+
+# File extensions to ignore
+*.parquet
+*.csv
+*.zip
+*.log
+*.tmp
+*.bak
+
+# Specific scripts
+fix_tsne.py
+fix_k_range.py
+insert_k_explanation.py
