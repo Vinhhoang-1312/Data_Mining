@@ -81,7 +81,16 @@ def inject_custom_css():
 
 def render_pie_chart(profiles):
     """Renders the cluster distribution pie chart."""
-    dist_data = [{"Name": v["profile_name"].replace('Pref__', '').replace('genre_', '').title(), "Size": v["size"]} for v in profiles.values()]
+    def _profile_display_name(v):
+        """Build a human-readable name from the profile dict."""
+        if "profile_name" in v:
+            return v["profile_name"].replace('Pref__', '').replace('genre_', '').replace('genre_pref__', '').title()
+        top = v.get("top_genres", [])
+        if top:
+            return top[0].replace('genre_pref__', '').replace('_', ' ').title()
+        return f"Cluster {v.get('cluster_id', '?')}"
+
+    dist_data = [{"Name": _profile_display_name(v), "Size": v.get("size", v.get("n_users", 0))} for v in profiles.values()]
     fig_pie = px.pie(
         pd.DataFrame(dist_data), values='Size', names='Name', hole=0.4,
         color_discrete_sequence=px.colors.qualitative.Pastel

@@ -34,7 +34,8 @@ def find_nearest_cluster(user_scaled, profiles, feature_cols):
     best_cluster, min_dist = None, float('inf')
     
     for k, v in profiles.items():
-        centroid = np.array([v["centroid_scores"][col] for col in feature_cols])
+        centroid_data = v.get("centroid_scores", v.get("centroid", {}))
+        centroid = np.array([centroid_data.get(col, 0.0) for col in feature_cols])
         d = np.linalg.norm(user_scaled - centroid)
         if d < min_dist:
             min_dist, best_cluster = d, k

@@ -206,11 +206,15 @@ if page == "Story A: Taste Tribes":
 
             st.markdown("---")
             st.markdown(f'<div class="tribe-badge">Cluster {best_cluster}</div>', unsafe_allow_html=True)
-            display_name = chosen_profile["profile_name"].replace("Pref__", "").replace("genre_", "").title()
+            if "profile_name" in chosen_profile:
+                display_name = chosen_profile["profile_name"].replace("Pref__", "").replace("genre_", "").replace("genre_pref__", "").title()
+            else:
+                top = chosen_profile.get("top_genres", [])
+                display_name = top[0].replace('genre_pref__', '').replace('_', ' ').title() if top else f"Cluster {best_cluster}"
             st.markdown(f"## 🎉 You belong to: **{display_name}**")
-            top_prefs = chosen_profile.get("top_preferences", [])
+            top_prefs = chosen_profile.get("top_preferences", chosen_profile.get("top_genres", []))
             if top_prefs:
-                display_prefs = [p.replace("Pref__", "").replace("genre_", "").title() for p in top_prefs]
+                display_prefs = [p.replace("Pref__", "").replace("genre_", "").replace("genre_pref__", "").replace("_", " ").title() for p in top_prefs]
                 st.caption("Top characteristics: " + ", ".join(display_prefs))
 
             st.markdown('<div class="section-header">🎬 Your Recommended Movies</div>', unsafe_allow_html=True)
@@ -257,9 +261,9 @@ elif page == "Story C: Behavioral Weirdness":
         return (
             pd.read_parquet(user_path)  if os.path.exists(user_path)     else None,
             pd.read_parquet(movie_path) if os.path.exists(movie_path)    else None,
-            json.load(open(manifest_path)) if os.path.exists(manifest_path) else {},
-            open(summary_path).read()   if os.path.exists(summary_path)  else "",
-            open(cases_path).read()     if os.path.exists(cases_path)    else "",
+            json.load(open(manifest_path, encoding='utf-8')) if os.path.exists(manifest_path) else {},
+            open(summary_path, encoding='utf-8').read()   if os.path.exists(summary_path)  else "",
+            open(cases_path, encoding='utf-8').read()     if os.path.exists(cases_path)    else "",
         )
 
     user_scores, movie_scores, manifest, summary_md, cases_md = load_story_c_artifacts()
