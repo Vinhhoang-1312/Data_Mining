@@ -87,10 +87,18 @@ def render_pie_chart(profiles):
             return v["profile_name"].replace('Pref__', '').replace('genre_', '').replace('genre_pref__', '').title()
         top = v.get("top_genres", [])
         genre_only = [g for g in top if 'genre_pref__' in g or 'genre' in g.lower()]
+        
+        # Deep search fallback if top 5 has no genres (e.g. Tribe 1 behavior cluster)
+        if not genre_only and "centroid_scores" in v:
+            scores = v["centroid_scores"]
+            all_genres = {k: val for k, val in scores.items() if 'genre_pref__' in k or 'genre' in k.lower()}
+            if all_genres:
+                genre_only = sorted(all_genres, key=all_genres.get, reverse=True)[:2]
+
         if genre_only:
             names = [g.replace('genre_pref__', '').replace('genre_', '').replace('_', ' ').title() for g in genre_only[:2]]
-            return ' & '.join(names) + ' Lovers'
-        return f"Cluster {v.get('cluster_id', '?')}"
+            return ' & '.join(names) + ' Enthusiasts'
+        return f"Tribe {v.get('cluster_id', '?')}"
 
     dist_data = [{"Name": _profile_display_name(v), "Size": v.get("size", v.get("n_users", 0))} for v in profiles.values()]
     fig_pie = px.pie(

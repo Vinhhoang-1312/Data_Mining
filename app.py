@@ -59,13 +59,22 @@ def _genre_display_name(profile):
     """Extract a human-readable tribe name from genre features only."""
     if "profile_name" in profile:
         return profile["profile_name"].replace("Pref__", "").replace("genre_", "").replace("genre_pref__", "").title()
+    
+    # Check top_genres first
     top = profile.get("top_genres", [])
-    genre_only = [g for g in top if 'genre_pref__' in g]
-    if not genre_only:
-        genre_only = [g for g in top if 'genre' in g.lower()]
+    genre_only = [g for g in top if 'genre_pref__' in g or 'genre' in g.lower()]
+    
+    # If top 5 has no genres, search ALL centroid features
+    if not genre_only and "centroid_scores" in profile:
+        scores = profile["centroid_scores"]
+        all_genres = {k: v for k, v in scores.items() if 'genre_pref__' in k or 'genre' in k.lower()}
+        if all_genres:
+            top_all = sorted(all_genres, key=all_genres.get, reverse=True)[:2]
+            genre_only = top_all
+
     if genre_only:
         names = [g.replace('genre_pref__', '').replace('genre_', '').replace('_', ' ').title() for g in genre_only[:2]]
-        return ' & '.join(names) + ' Lovers'
+        return ' & '.join(names) + ' Enthusiasts'
     return f"Tribe {profile.get('cluster_id', '?')}"
 
 def _genre_only_prefs(profile):
@@ -135,6 +144,13 @@ if page == "Story A: Taste Tribes":
 
     active_tab = st.radio("View", ["📊 Overview & Analytics", "🚀 Cold-Start Demo"], horizontal=True, label_visibility="collapsed")
 
+    # Artifact Sync Check
+    if df_pca3d_base is not None:
+        p_col = 'Cluster' if 'Cluster' in df_pca3d_base.columns else 'cluster'
+        k_in_charts = df_pca3d_base[p_col].nunique()
+        if k_in_charts != len(profiles):
+            st.warning(f"⚠️ Artifacts out of sync: K={len(profiles)} in profiles but K={k_in_charts} in charts. Re-run notebook to align.")
+
     # ── Tab 1: Overview ──────────────────────────────────────────────────────
     if active_tab == "📊 Overview & Analytics":
         st.markdown('<div class="section-header">Tribe Distribution</div>', unsafe_allow_html=True)
@@ -156,7 +172,7 @@ if page == "Story A: Taste Tribes":
 
         st.markdown('<div class="section-header">2D Manifold Projection (t-SNE)</div>', unsafe_allow_html=True)
         if df_tsne_base is not None:
-            st.plotly_chart(build_tsne_fig_with_user(df_tsne_base), use_container_width=True, key="a_overview_tsne")
+            st.plotly_chart(build_tsne_fig_with_user(df_tsne_base), use_container_width=True, key="a_overview_tsne", theme=None)
         else:
             tsne_path = os.path.join(FIGURES_DIR, "cluster_scatter_tsne.html")
             if os.path.exists(tsne_path):
@@ -167,7 +183,7 @@ if page == "Story A: Taste Tribes":
 
         st.markdown('<div class="section-header">3D Cluster Projection (PCA)</div>', unsafe_allow_html=True)
         if df_pca3d_base is not None:
-            st.plotly_chart(build_pca3d_fig_with_user(df_pca3d_base), use_container_width=True, key="a_overview_pca3d")
+            st.plotly_chart(build_pca3d_fig_with_user(df_pca3d_base), use_container_width=True, key="a_overview_pca3d", theme=None)
         else:
             pca_path = os.path.join(FIGURES_DIR, "cluster_scatter_pca_3d.html")
             if os.path.exists(pca_path):
@@ -260,8 +276,9 @@ if page == "Story A: Taste Tribes":
                     top_genre_names = [g.replace('_', '-').title() for g in st.session_state.selected_genres]
                     
                 if top_genre_names:
-                    mask = movie_lookup['genres'].str.contains('|'.join(top_genre_names), case=False, na=False)
-                    recs = movie_lookup[mask].drop_duplicates('title').head(10)
+                    regex_str = '|'.join(top_genre_names)
+                    mask = movie_lookup['genres'].str.contains(regex_str, case=False, na=False)
+                    recs = movie_lookup[mask].sort_values('title').head(12)
                     if not recs.empty:
                         fallback_items = [
                             {"title": row['title'], "info": row.get('genres', ''), "genre": '', "raw": ''}
@@ -286,14 +303,14 @@ if page == "Story A: Taste Tribes":
                 if df_tsne_base is not None:
                     st.plotly_chart(
                         build_tsne_fig_with_user(df_tsne_base, user_tsne=st.session_state.get("user_tsne")),
-                        use_container_width=True, key="a_coldstart_tsne",
+                        use_container_width=True, key="a_coldstart_tsne", theme=None
                     )
             with col_3d:
                 st.markdown("**3D PCA Projection**")
                 if df_pca3d_base is not None:
                     st.plotly_chart(
                         build_pca3d_fig_with_user(df_pca3d_base, user_pca3d=st.session_state.get("user_pca3d")),
-                        use_container_width=True, key="a_coldstart_pca3d",
+                        use_container_width=True, key="a_coldstart_pca3d", theme=None
                     )
 
 

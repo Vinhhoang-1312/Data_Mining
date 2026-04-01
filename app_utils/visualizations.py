@@ -68,15 +68,26 @@ def apply_dimensionality_reduction(X_scaled, labels):
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig_3d.update_layout(
+        template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family='Inter, sans-serif', size=12, color='#FFF'),
+        font=dict(family='Inter, sans-serif', size=12, color='white'),
+        title_font_color="white",
         margin=dict(l=0, r=0, t=40, b=0),
-        legend=dict(orientation='h', yanchor='bottom', y=0.9, xanchor='right', x=1),
+        legend=dict(orientation='h', yanchor='bottom', y=0.9, xanchor='right', x=1, font=dict(color='white')),
         scene=dict(
-            xaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666"),
-            yaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666"),
-            zaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666")
+            xaxis=dict(
+                backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666",
+                title=dict(font=dict(color='white')), tickfont=dict(color='white')
+            ),
+            yaxis=dict(
+                backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666",
+                title=dict(font=dict(color='white')), tickfont=dict(color='white')
+            ),
+            zaxis=dict(
+                backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666",
+                title=dict(font=dict(color='white')), tickfont=dict(color='white')
+            )
         )
     )
     fig_3d.write_html(os.path.join(FIGURES_OUT, "cluster_scatter_pca_3d.html"))
@@ -96,8 +107,11 @@ def build_tsne_fig_with_user(df_tsne: pd.DataFrame, user_tsne: tuple = None) -> 
     user_tsne : tuple (x, y) or None
         If provided, adds a gold star marker at those coordinates.
     """
+    color_col = 'Cluster' if 'Cluster' in df_tsne.columns else 'cluster'
+    df_tsne[color_col] = df_tsne[color_col].astype(str)
+    
     fig = px.scatter(
-        df_tsne, x='x', y='y', color='Cluster' if 'Cluster' in df_tsne.columns else 'cluster',
+        df_tsne, x='x', y='y', color=color_col,
         title='Taste Tribes (t-SNE 2D Projection)',
         opacity=0.6,
         color_discrete_sequence=px.colors.qualitative.Pastel
@@ -134,22 +148,36 @@ def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None) 
     user_pca3d : tuple (x, y, z) or None
         If provided, adds a gold diamond marker at those coordinates.
     """
+    color_col = 'Cluster' if 'Cluster' in df_pca3d.columns else 'cluster'
+    df_pca3d[color_col] = df_pca3d[color_col].astype(str)
+
     fig_3d = px.scatter_3d(
-        df_pca3d, x='x', y='y', z='z', color='Cluster' if 'Cluster' in df_pca3d.columns else 'cluster',
+        df_pca3d, x='x', y='y', z='z', color=color_col,
         title='Taste Tribes (PCA 3D Projection)',
         opacity=0.7,
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig_3d.update_layout(
+        template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family='Inter, sans-serif', size=12, color='#FFF'),
+        font=dict(family='Inter, sans-serif', size=12, color='white'),
+        title_font_color="white",
         margin=dict(l=0, r=0, t=40, b=0),
-        legend=dict(orientation='h', yanchor='bottom', y=0.9, xanchor='right', x=1),
+        legend=dict(orientation='h', yanchor='bottom', y=0.9, xanchor='right', x=1, font=dict(color='white')),
         scene=dict(
-            xaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666"),
-            yaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666"),
-            zaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666")
+            xaxis=dict(
+                backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666",
+                title=dict(font=dict(color='white')), tickfont=dict(color='white')
+            ),
+            yaxis=dict(
+                backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666",
+                title=dict(font=dict(color='white')), tickfont=dict(color='white')
+            ),
+            zaxis=dict(
+                backgroundcolor="rgba(0,0,0,0)", gridcolor="#444", showbackground=True, zerolinecolor="#666",
+                title=dict(font=dict(color='white')), tickfont=dict(color='white')
+            )
         )
     )
     if user_pca3d is not None:

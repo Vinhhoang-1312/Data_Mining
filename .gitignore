@@ -35,7 +35,7 @@ Thumbs.db
 ml-latest/
 data-warehousing/
 movielens-mining-group-project-main/
-
+aHung_preference/
 # Artifacts - We ignore tables (parquet) but might want to keep figures/reports
 # However, usually we ignore the whole artifacts dir in Git to keep repo light.
 # If you want to push reports, you'd need to negative ignore them.
