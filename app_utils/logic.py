@@ -135,9 +135,11 @@ def project_user_into_charts(user_scaled, figures_dir):
                 diffs = (df_pca3d[['x', 'y', 'z']].values
                          - np.array(user_pca3d))
                 dists = np.linalg.norm(diffs, axis=1)
-                nearest_cluster = df_pca3d.iloc[dists.argmin()]['Cluster']
+                cluster_col = 'Cluster' if 'Cluster' in df_pca3d.columns else 'cluster'
+                nearest_cluster = df_pca3d.iloc[dists.argmin()][cluster_col]
                 # Get mean t-SNE coords for that cluster
-                cluster_tsne = df_tsne[df_tsne['Cluster'].astype(str) == str(nearest_cluster)]
+                tsne_cluster_col = 'Cluster' if 'Cluster' in df_tsne.columns else 'cluster'
+                cluster_tsne = df_tsne[df_tsne[tsne_cluster_col].astype(str) == str(nearest_cluster)]
                 if not cluster_tsne.empty:
                     cx = float(cluster_tsne['x'].mean())
                     cy = float(cluster_tsne['y'].mean())

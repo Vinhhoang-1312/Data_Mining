@@ -255,6 +255,10 @@ if page == "Story A: Taste Tribes":
                 top_genre_names = [g.replace('genre_pref__', '').replace('_', '-').title()
                                    for g in chosen_profile.get('top_genres', [])
                                    if 'genre_pref__' in g]
+                if not top_genre_names:
+                    # Ultimate fallback: use the user's own selected genres
+                    top_genre_names = [g.replace('_', '-').title() for g in st.session_state.selected_genres]
+                    
                 if top_genre_names:
                     mask = movie_lookup['genres'].str.contains('|'.join(top_genre_names), case=False, na=False)
                     recs = movie_lookup[mask].drop_duplicates('title').head(10)
