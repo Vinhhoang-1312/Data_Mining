@@ -86,8 +86,10 @@ def render_pie_chart(profiles):
         if "profile_name" in v:
             return v["profile_name"].replace('Pref__', '').replace('genre_', '').replace('genre_pref__', '').title()
         top = v.get("top_genres", [])
-        if top:
-            return top[0].replace('genre_pref__', '').replace('_', ' ').title()
+        genre_only = [g for g in top if 'genre_pref__' in g or 'genre' in g.lower()]
+        if genre_only:
+            names = [g.replace('genre_pref__', '').replace('genre_', '').replace('_', ' ').title() for g in genre_only[:2]]
+            return ' & '.join(names) + ' Lovers'
         return f"Cluster {v.get('cluster_id', '?')}"
 
     dist_data = [{"Name": _profile_display_name(v), "Size": v.get("size", v.get("n_users", 0))} for v in profiles.values()]

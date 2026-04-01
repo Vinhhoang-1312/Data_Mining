@@ -54,6 +54,33 @@ with st.sidebar:
     st.markdown("---")
 
 
+# ── Helper Functions ──────────────────────────────────────────────────────────
+def _genre_display_name(profile):
+    """Extract a human-readable tribe name from genre features only."""
+    if "profile_name" in profile:
+        return profile["profile_name"].replace("Pref__", "").replace("genre_", "").replace("genre_pref__", "").title()
+    top = profile.get("top_genres", [])
+    genre_only = [g for g in top if 'genre_pref__' in g]
+    if not genre_only:
+        genre_only = [g for g in top if 'genre' in g.lower()]
+    if genre_only:
+        names = [g.replace('genre_pref__', '').replace('genre_', '').replace('_', ' ').title() for g in genre_only[:2]]
+        return ' & '.join(names) + ' Lovers'
+    return f"Tribe {profile.get('cluster_id', '?')}"
+
+def _genre_only_prefs(profile):
+    """Return only genre-related items from top_genres/top_preferences."""
+    top = profile.get("top_preferences", profile.get("top_genres", []))
+    genre_only = [g for g in top if 'genre_pref__' in g or 'genre' in g.lower()]
+    return [g.replace('genre_pref__', '').replace('genre_', '').replace('_', ' ').title() for g in genre_only]
+
+def _safe_metric(val):
+    """Safely format a metric value with comma separator."""
+    if isinstance(val, (int, float)):
+        return f"{int(val):,}"
+    return str(val)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # STORY A — TASTE TRIBES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -106,10 +133,10 @@ if page == "Story A: Taste Tribes":
     st.title("🎬 Story A: Taste Tribes")
     st.markdown("User segmentation — phân nhóm người dùng thành các nhóm sở thích.")
 
-    tab1, tab2 = st.tabs(["📊 Overview & Analytics", "🚀 Cold-Start Demo"])
+    active_tab = st.radio("View", ["📊 Overview & Analytics", "🚀 Cold-Start Demo"], horizontal=True, label_visibility="collapsed")
 
     # ── Tab 1: Overview ──────────────────────────────────────────────────────
-    with tab1:
+    if active_tab == "📊 Overview & Analytics":
         st.markdown('<div class="section-header">Tribe Distribution</div>', unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1.5])
         with col1:
@@ -150,7 +177,7 @@ if page == "Story A: Taste Tribes":
                 st.info("3D scatter not found — re-run the notebook.")
 
     # ── Tab 2: Cold-Start Demo ───────────────────────────────────────────────
-    with tab2:
+    elif active_tab == "🚀 Cold-Start Demo":
         st.markdown("## 🎯 Cold-Start User Simulation")
         st.markdown("Chọn thể loại phim yêu thích để xem bạn thuộc nhóm nào.")
         st.markdown("---")
@@ -200,25 +227,49 @@ if page == "Story A: Taste Tribes":
                 best_cluster, chosen_profile = find_nearest_cluster(user_scaled, profiles, feature_cols)
                 movie_items = parse_movies_from_markdown(cards_md, best_cluster)
                 user_tsne, user_pca3d = project_user_into_charts(user_scaled, FIGURES_DIR)
-                st.session_state.user_tsne    = user_tsne
-                st.session_state.user_pca3d   = user_pca3d
-                st.session_state.best_cluster = best_cluster
+                st.session_state.user_tsne      = user_tsne
+                st.session_state.user_pca3d     = user_pca3d
+                st.session_state.best_cluster   = best_cluster
+                st.session_state.chosen_profile = chosen_profile
+                st.session_state.movie_items    = movie_items
+
+        # Persist results across reruns (genre select triggers rerun)
+        if "best_cluster" in st.session_state and st.session_state.best_cluster is not None:
+            best_cluster   = st.session_state.best_cluster
+            chosen_profile = st.session_state.chosen_profile
+            movie_items    = st.session_state.get("movie_items", [])
 
             st.markdown("---")
+            display_name = _genre_display_name(chosen_profile)
             st.markdown(f'<div class="tribe-badge">Cluster {best_cluster}</div>', unsafe_allow_html=True)
-            if "profile_name" in chosen_profile:
-                display_name = chosen_profile["profile_name"].replace("Pref__", "").replace("genre_", "").replace("genre_pref__", "").title()
-            else:
-                top = chosen_profile.get("top_genres", [])
-                display_name = top[0].replace('genre_pref__', '').replace('_', ' ').title() if top else f"Cluster {best_cluster}"
             st.markdown(f"## 🎉 You belong to: **{display_name}**")
-            top_prefs = chosen_profile.get("top_preferences", chosen_profile.get("top_genres", []))
-            if top_prefs:
-                display_prefs = [p.replace("Pref__", "").replace("genre_", "").replace("genre_pref__", "").replace("_", " ").title() for p in top_prefs]
-                st.caption("Top characteristics: " + ", ".join(display_prefs))
+            genre_prefs = _genre_only_prefs(chosen_profile)
+            if genre_prefs:
+                st.caption("Top genre preferences: " + ", ".join(genre_prefs))
 
             st.markdown('<div class="section-header">🎬 Your Recommended Movies</div>', unsafe_allow_html=True)
-            ui.render_recommended_movies(movie_items, movie_lookup)
+            if movie_items:
+                ui.render_recommended_movies(movie_items, movie_lookup)
+            elif movie_lookup is not None and not movie_lookup.empty:
+                # Fallback: recommend top-rated movies matching the cluster's top genres
+                top_genre_names = [g.replace('genre_pref__', '').replace('_', '-').title()
+                                   for g in chosen_profile.get('top_genres', [])
+                                   if 'genre_pref__' in g]
+                if top_genre_names:
+                    mask = movie_lookup['genres'].str.contains('|'.join(top_genre_names), case=False, na=False)
+                    recs = movie_lookup[mask].drop_duplicates('title').head(10)
+                    if not recs.empty:
+                        fallback_items = [
+                            {"title": row['title'], "info": row.get('genres', ''), "genre": '', "raw": ''}
+                            for _, row in recs.iterrows()
+                        ]
+                        ui.render_recommended_movies(fallback_items, movie_lookup)
+                    else:
+                        st.info("Không tìm thấy phim phù hợp.")
+                else:
+                    st.info("Không tìm thấy phim phù hợp.")
+            else:
+                st.info("Movie lookup data not available — re-run the notebook.")
 
         st.markdown("---")
         st.markdown("### 📍 Where do you sit among the Tribes?")
@@ -274,9 +325,9 @@ elif page == "Story C: Behavioral Weirdness":
             st.caption("Last run:")
             st.write(manifest.get("timestamp", "?")[:19])
             metrics = manifest.get("metrics", {})
-            st.metric("Users analysed",  f"{metrics.get('n_users_sampled', '?'):,}")
-            st.metric("Anomalies (ISO)", f"{metrics.get('n_anomalous_iso', '?'):,}")
-            st.metric("Movies analysed", f"{metrics.get('n_movies_analyzed', '?'):,}")
+            st.metric("Users analysed",  _safe_metric(metrics.get('n_users_sampled', '?')))
+            st.metric("Anomalies (ISO)", _safe_metric(metrics.get('n_anomalous_iso', '?')))
+            st.metric("Movies analysed", _safe_metric(metrics.get('n_movies_analyzed', '?')))
         else:
             st.warning("Run notebook `story_c_behavioral_weirdness.ipynb` first.")
 
