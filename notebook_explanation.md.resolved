@@ -1,0 +1,65 @@
+# Giải thích chi tiết Notebook: Story A - Taste Tribes
+
+Tài liệu này giải thích từng bước logic trong notebook [story_a_taste_tribes.ipynb](file:///c:/Users/DELL/Desktop/Vinh%20Hoang/Master%20Program/Data%20Mining/project/story_a_taste_tribes.ipynb), từ lúc xử lý dữ liệu thô cho đến khi tạo ra các "Bộ lạc thị hiếu" (Taste Tribes) trên Dashboard.
+
+---
+
+## 1. Mục tiêu (Objective)
+Notebook này thực hiện gom cụm người dùng dựa trên sở thích thể loại phim (Genre Preferences) của họ. Kết quả là các nhóm người dùng có gu xem phim tương đồng.
+
+---
+
+## 2. Các bước xử lý chính
+
+### Bước 1: Xây dựng Ma trận Người dùng - Thể loại (User-Genre Matrix)
+- **Dữ liệu nguồn**: [ratings.csv](file:///c:/Users/DELL/Desktop/Vinh%20Hoang/Master%20Program/Data%20Mining/project/ml-latest/ratings.csv) và [movies.csv](file:///c:/Users/DELL/Desktop/Vinh%20Hoang/Master%20Program/Data%20Mining/project/ml-latest/movies.csv).
+- **Xử lý**: 
+    1. Tách các thể loại (genres) từ cột `genres` (ví dụ: "Action|Sci-Fi" thành 2 hàng riêng).
+    2. Liên kết (Join) bảng ratings với bảng movies.
+    3. Sử dụng hàm `pivot_table` để tạo ma trận:
+        - **Dòng**: Mỗi UserId.
+        - **Cột**: Mỗi Thể loại (Action, Comedy, Drama...).
+        - **Giá trị**: Điểm rating trung bình mà người đó dành cho thể loại đó.
+- **Tiền xử lý**: Điền các giá trị thiếu (NaN) bằng 0 (người dùng chưa xem thể loại đó).
+
+### Bước 2: Chuẩn hóa dữ liệu (Standardization)
+- **Mã nguồn**: `StandardScaler().fit_transform(user_genre_matrix)`
+- **Tại sao?**: Các thuật toán như K-Means và PCA rất nhạy cảm với thang đo. Chúng ta đưa tất cả sở thích về cùng một phân phối (trung bình = 0, độ lệch chuẩn = 1) để đảm bảo các thể loại đều có "tiếng nói" ngang nhau.
+
+### Bước 3: Giảm chiều PCA 3D (Dimensionality Reduction)
+- **Mã nguồn**: `PCA(n_components=3)`
+- **Giải thích**: 
+    - Dữ liệu gốc có khoảng 20 chiều (20 thể loại phim). Con người không thể nhìn thấy không gian 20 chiều.
+    - PCA tìm ra 3 trục chính (PC1, PC2, PC3) chứa nhiều thông tin biến động nhất của dữ liệu.
+    - **Kết quả**: Biến mỗi người dùng từ một danh sách 20 con số thành tọa độ $(x, y, z)$ để vẽ lên biểu đồ 3D.
+
+### Bước 4: Phân cụm K-Means
+- **Mã nguồn**: `KMeans(n_clusters=3, random_state=42)`
+- **Giải thích**: 
+    - Thuật toán tìm cách chia người dùng thành 3 nhóm sao cho khoảng cách từ mỗi người đến tâm cụm của họ là nhỏ nhất.
+    - **K=3**: Qua phân tích Elbow, 3 là con số tối ưu để phân loại rõ rệt các nhóm: "Fan phim hành động", "Fan phim tình cảm/hài", và "Nhóm xem đa dạng".
+
+### Bước 5: Tính toán Profile cụm (Radar Chart Data)
+- **Mã nguồn**: `cluster_profiles = user_genre_matrix.groupby('cluster').mean()`
+- **Giải thích**: 
+    - Với mỗi cụm, chúng ta tính điểm rating trung bình cho từng thể loại.
+    - Ví dụ: Cụm 0 có điểm Action cao nhất -> Đây là cụm "Hành động".
+    - Dữ liệu này được xuất ra [cluster_profiles.json](file:///c:/Users/DELL/Desktop/Vinh%20Hoang/Master%20Program/Data%20Mining/project/artifacts/story_A/reports/cluster_profiles.json) để vẽ biểu đồ Radar trên Dashboard.
+
+### Bước 6: Xuất dữ liệu cho Dashboard
+- **Parquet**: Lưu tọa độ PCA (`PC1`, `PC2`, `PC3`) và t-SNE cùng với nhãn [cluster](file:///c:/Users/DELL/Desktop/Vinh%20Hoang/Master%20Program/Data%20Mining/project/app_utils/logic.py#29-43) vào file [.parquet](file:///c:/Users/DELL/Desktop/Vinh%20Hoang/Master%20Program/Data%20Mining/project/artifacts/story_A/tables/cluster_labels_users.parquet). Định dạng này nhẹ và nhanh hơn CSV.
+- **HTML**: Lưu biểu đồ Plotly 3D trực tiếp để Dashboard có thể nhúng vào.
+
+---
+
+## 3. Các thành phần kỹ thuật quan trọng
+- **t-SNE**: Một kỹ thuật giảm chiều khác tập trung vào việc giữ các điểm gần nhau ở không gian cao chiều vẫn gần nhau ở không gian thấp chiều. Dùng để kiểm chứng xem các cụm có thực sự tách biệt không.
+- **Silhouette Score**: Chỉ số đánh giá chất lượng phân cụm (càng gần 1 càng tốt). Trong code, chúng ta in ra chỉ số này để đảm bảo K=3 là hợp lý.
+
+---
+
+## 4. Ý nghĩa các tham số trong biểu đồ PCA 3D
+- **PC1 (Principal Component 1)**: Trục chứa biến động lớn nhất. Thường là sự khác biệt giữa người xem ít/nhiều hoặc một nhóm thể loại cực kỳ phổ biến.
+- **PC2 & PC3**: Các trục bổ sung thông tin để làm rõ cấu trúc 3D.
+- **Màu sắc**: Đại diện cho Cluster ID (0, 1, 2).
+- **White Text**: Đã được ép kiểu trong code để hiển thị rõ trên nền tối của Dashboard.
