@@ -1,7 +1,6 @@
 import numpy as np
 import os
 
-
 def build_synthetic_user_vector(selected_genres, feature_cols, scaler_mean, scaler_scale):
     """
     Simulates a "Cold Start" user by placing high score values (5.0) in the user's
@@ -26,16 +25,34 @@ def build_synthetic_user_vector(selected_genres, feature_cols, scaler_mean, scal
     return user_scaled
 
 
-def find_nearest_cluster(user_scaled, profiles, feature_cols):
+def find_nearest_cluster(user_scaled, profiles, feature_cols, scaler_mean=None, scaler_scale=None):
     """
     Computes Euclidean distance between the simulated user vector and all KMeans centroids.
     Returns the nearest cluster ID (best_cluster) and distance.
+    If actual centroids are missing, builds a proxy from 'top_genres' using scaler metadata.
     """
     best_cluster, min_dist = None, float('inf')
     
     for k, v in profiles.items():
         centroid_data = v.get("centroid_scores", v.get("centroid", {}))
-        centroid = np.array([centroid_data.get(col, 0.0) for col in feature_cols])
+        
+        if not centroid_data:
+            # Fallback: build proxy vector from top_genres
+            top_g = [g.lower().replace("genre_pref__","").replace("genre_","").replace("-","_") for g in v.get("top_genres", [])]
+            proxy_raw = np.zeros(len(feature_cols))
+            for g in top_g:
+                raw_c = "genre_pref__" + g
+                if raw_c in feature_cols:
+                    proxy_raw[feature_cols.index(raw_c)] = 5.0
+            
+            # Scale the proxy if metadata provided
+            if scaler_mean is not None and scaler_scale is not None:
+                centroid = (proxy_raw - scaler_mean) / scaler_scale
+            else:
+                centroid = proxy_raw
+        else:
+            centroid = np.array([centroid_data.get(col, 0.0) for col in feature_cols])
+            
         d = np.linalg.norm(user_scaled - centroid)
         if d < min_dist:
             min_dist, best_cluster = d, k
@@ -53,19 +70,21 @@ def parse_movies_from_markdown(cards_md, cluster_id):
     
     for line in lines:
         s = line.strip()
-        if s.startswith(f"## Cluster {cluster_id}:"):
+        # Be loose: look for "Cluster {id}" as a substring in a heading
+        if s.startswith("## ") and f"Cluster {cluster_id}" in s:
             in_cluster = True
         elif in_cluster and s.startswith("## Cluster"):
             break
-        elif in_cluster and s.startswith("- **") and "(Mean:" in s:
+        elif in_cluster and s.startswith("- **"):
             try:
                 title_raw = s.split("**")[1]
-                genre_tag = s.split("_")[-1].strip() if "_" in s else ""
-                info      = s.split("(Mean:")[1].split(")")[0].strip() if "(Mean:" in s else ""
+                info = ""
+                if "(" in s: info = s.split("(")[1].split(")")[0].strip()
+                elif "—" in s: info = s.split("—")[1].strip()
+                
                 movie_items.append({
                     "title": title_raw, 
                     "info": info, 
-                    "genre": genre_tag, 
                     "raw": s
                 })
             except Exception:
@@ -74,78 +93,63 @@ def parse_movies_from_markdown(cards_md, cluster_id):
     return movie_items
 
 
-def project_user_into_charts(user_scaled, figures_dir):
+def project_user_into_charts(user_scaled, figures_dir, assigned_cluster=None, profiles=None):
     """
     Projects a cold-start user's scaled feature vector into the pre-computed
     2D t-SNE and 3D PCA chart spaces.
-
-    Strategy:
-    - 3D PCA: uses the saved PCA model to transform exactly.
-    - 2D t-SNE: t-SNE is non-parametric, so we approximate by finding the
-      nearest neighbor in the saved t-SNE sample and using its coordinates
-      with a small offset so the user marker is visually distinct.
-
-    Parameters
-    ----------
-    user_scaled : np.ndarray
-        The scaled feature vector produced by `build_synthetic_user_vector`.
-    figures_dir : str
-        Directory where projection artifacts live (pca_3d_model.joblib, tsne_sample_data.csv).
-
-    Returns
-    -------
-    user_tsne : tuple (x, y) or None
-    user_pca3d : tuple (x, y, z) or None
+    Robust matching: handles numeric IDs and descriptive Tribe names.
     """
     import pandas as pd
+    import numpy as np
 
     user_tsne = None
     user_pca3d = None
-
-    # ── 3D PCA (exact projection) ──
+    
     pca_model_path = os.path.join(figures_dir, "pca_3d_model.joblib")
     pca3d_sample_path = os.path.join(figures_dir, "pca3d_sample.parquet")
-    if os.path.exists(pca_model_path) and os.path.exists(pca3d_sample_path):
+    tsne_path = os.path.join(figures_dir, "tsne_sample_data.csv")
+    candidates = ['Cluster', 'cluster', 'Taste Tribe', 'Tribe']
+
+    # ── 3D PCA ──
+    if os.path.exists(pca_model_path):
         try:
             import joblib
             pca_3d = joblib.load(pca_model_path)
-            # pca_3d was fitted on X_sample; user_scaled may have more features
-            # We need to align: the PCA n_features_ tells us how many it expects
             n_feat = pca_3d.n_features_in_
             arr = np.array(user_scaled[:n_feat]).reshape(1, -1)
-            coords_3d = pca_3d.transform(arr)[0]
-            user_pca3d = tuple(coords_3d)
-        except Exception:
-            user_pca3d = None
+            user_pca3d = tuple(pca_3d.transform(arr)[0])
+        except Exception: pass
+        
+    if user_pca3d is None and assigned_cluster is not None and os.path.exists(pca3d_sample_path):
+        try:
+            df_pca3d = pd.read_parquet(pca3d_sample_path)
+            c_col = next((c for c in candidates if c in df_pca3d.columns), 'Cluster')
+            mask = (df_pca3d[c_col].astype(str) == str(assigned_cluster))
+            pts = df_pca3d[mask]
+            if pts.empty and profiles is not None:
+                # Name-based fallback
+                name = profiles.get(str(assigned_cluster), {}).get("name", "")
+                if name: pts = df_pca3d[df_pca3d[c_col].astype(str).str.contains(name, na=False)]
+            
+            if not pts.empty:
+                user_pca3d = (float(pts['x'].mean()), float(pts['y'].mean()), float(pts['z'].mean()))
+        except Exception: pass
 
-    # ── 2D t-SNE (nearest-neighbor approximation) ──
-    tsne_path = os.path.join(figures_dir, "tsne_sample_data.csv")
+    # ── 2D t-SNE ──
     if os.path.exists(tsne_path):
         try:
             df_tsne = pd.read_csv(tsne_path)
-            # We only stored x, y, Cluster — no raw features, so we use the
-            # cluster assignment as a guide: find the centroid of the user's
-            # assigned cluster in t-SNE space and add a tiny offset.
-            # (If we stored raw features in tsne_sample we could do KNN;
-            #  for now cluster-centroid is a reliable, fast approximation.)
-            # Derive cluster from pca3d sample if available
-            if user_pca3d is not None and os.path.exists(pca3d_sample_path):
-                df_pca3d = pd.read_parquet(pca3d_sample_path)
-                # Find the Cluster label of the nearest 3D neighbor
-                diffs = (df_pca3d[['x', 'y', 'z']].values
-                         - np.array(user_pca3d))
-                dists = np.linalg.norm(diffs, axis=1)
-                cluster_col = 'Cluster' if 'Cluster' in df_pca3d.columns else 'cluster'
-                nearest_cluster = df_pca3d.iloc[dists.argmin()][cluster_col]
-                # Get mean t-SNE coords for that cluster
-                tsne_cluster_col = 'Cluster' if 'Cluster' in df_tsne.columns else 'cluster'
-                cluster_tsne = df_tsne[df_tsne[tsne_cluster_col].astype(str) == str(nearest_cluster)]
-                if not cluster_tsne.empty:
-                    cx = float(cluster_tsne['x'].mean())
-                    cy = float(cluster_tsne['y'].mean())
-                    # Small offset so star doesn't sit exactly on top of the cluster center
-                    user_tsne = (cx + 3.0, cy + 3.0)
-        except Exception:
-            user_tsne = None
+            t_col = next((c for c in candidates if c in df_tsne.columns), 'Cluster')
+            mask = (df_tsne[t_col].astype(str) == str(assigned_cluster))
+            pts = df_tsne[mask]
+            if pts.empty and assigned_cluster is not None and profiles is not None:
+                # Name-based fallback
+                name = profiles.get(str(assigned_cluster), {}).get("name", "")
+                if name: pts = df_tsne[df_tsne[t_col].astype(str).str.contains(name, na=False)]
+
+            if not pts.empty:
+                cx, cy = float(pts['x'].mean()), float(pts['y'].mean())
+                user_tsne = (cx + 2.0, cy + 2.0)
+        except Exception: pass
 
     return user_tsne, user_pca3d

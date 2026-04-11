@@ -70,7 +70,7 @@ def load_movie_lookup():
     except Exception:
         return None
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_poster_by_name(title: str) -> str | None:
     """Search TMDB by movie title, return full poster URL."""
     if not TMDB_API_KEY:
@@ -89,7 +89,7 @@ def fetch_poster_by_name(title: str) -> str | None:
         pass
     return None
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_poster_by_tmdb_id(tmdb_id) -> str | None:
     """Fetch exact movie from TMDB, return full poster URL."""
     if not TMDB_API_KEY or pd.isna(tmdb_id):
@@ -245,3 +245,66 @@ The clustering was performed on genre preference features and activity metrics.
         f.write(summary_text)
 
     print(f"Artifacts successfully exported to: {REPORTS_OUT}")
+
+
+@st.cache_data
+def load_user_features():
+    """Load the pre-computed user feature table (322K rows × 29 cols)."""
+    path = os.path.join(DATA_DIR, "user_features_train.parquet")
+    if os.path.exists(path):
+        return pd.read_parquet(path)
+    return None
+
+
+@st.cache_data
+def load_cluster_labels():
+    """Load the cluster assignment table (userId → cluster_id)."""
+    path = os.path.join(TABLES_DIR, "cluster_labels_users.parquet")
+    if os.path.exists(path):
+        return pd.read_parquet(path)
+    return None
+
+
+def lookup_user_data(user_id: int, labels_df, user_features_df, movie_lookup):
+    """
+    Given a userId, return:
+      - cluster_id  (int | None)
+      - user_row    (pd.Series | None)  — raw feature row
+      - rated_movies (pd.DataFrame | None) — movies the user rated, joined with titles
+    Uses only in-memory DataFrames; does NOT re-read the 30M interactions file.
+    """
+    # 1. Cluster assignment
+    if labels_df is None:
+        return None, None, None
+    row = labels_df[labels_df["userId"] == user_id]
+    if row.empty:
+        return None, None, None
+    cluster_id = int(row.iloc[0]["cluster_id"])
+
+    # 2. User feature row
+    user_row = None
+    if user_features_df is not None:
+        ur = user_features_df[user_features_df["userId"] == user_id]
+        user_row = ur.iloc[0] if not ur.empty else None
+
+    # 3. Rated movies — read interactions lazily (only the userId rows)
+    rated_movies = None
+    if movie_lookup is not None:
+        inter_path = os.path.join(DATA_DIR, "interactions_train.parquet")
+        if os.path.exists(inter_path):
+            try:
+                # Read only the columns we need; filter instantly via pyarrow filter
+                import pyarrow.parquet as pq
+                pf = pq.ParquetFile(inter_path)
+                filters = [[('userId', '=', user_id)]]
+                table = pf.read(columns=['userId', 'movieId', 'rating', 'timestamp'],
+                                filters=filters)
+                df_inter = table.to_pandas()
+                if not df_inter.empty:
+                    df_inter = df_inter.sort_values('rating', ascending=False)
+                    rated_movies = df_inter.merge(movie_lookup[["movieId", "title", "genres", "tmdbId"]],
+                                                  on="movieId", how="left")
+            except Exception:
+                pass
+
+    return cluster_id, user_row, rated_movies

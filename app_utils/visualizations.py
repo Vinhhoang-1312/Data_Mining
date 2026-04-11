@@ -35,7 +35,7 @@ def apply_dimensionality_reduction(X_scaled, labels):
     
     fig = px.scatter(
         df_tsne, x='x', y='y', color='Cluster',
-        title='Taste Tribes (t-SNE 2D Projection)',
+        # title='Taste Tribes (t-SNE 2D Projection)', # Removed title to avoid overlap with legend
         opacity=0.6,
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
@@ -44,9 +44,13 @@ def apply_dimensionality_reduction(X_scaled, labels):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family='Inter, sans-serif', size=12, color='#FFF'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1,
-                    font=dict(family='Inter, sans-serif', size=10, color='#FFF')),
-        margin=dict(l=0, r=0, t=40, b=0)
+        legend=dict(
+            orientation='h', 
+            yanchor='bottom', y=1.05, 
+            xanchor='center', x=0.5,
+            font=dict(family='Inter, sans-serif', size=11, color='#FFF')
+        ),
+        margin=dict(l=0, r=0, t=50, b=0)
     )
     fig.write_html(os.path.join(FIGURES_OUT, "cluster_scatter_tsne.html"))
     # fig.write_image(os.path.join(FIGURES_OUT, "cluster_map.png")) # Disabled: hangs in this environment
@@ -97,8 +101,10 @@ def apply_dimensionality_reduction(X_scaled, labels):
     print("Projection artifacts saved (pca_3d_model.joblib, tsne_sample_data.csv, pca3d_sample.parquet)")
 
 
-def build_tsne_fig_with_user(df_tsne: pd.DataFrame, user_tsne: tuple = None) -> go.Figure:
-    """Return a Plotly t-SNE scatter figure, optionally with a highlighted cold-start user point.
+def build_tsne_fig_with_user(df_tsne: pd.DataFrame, user_tsne: tuple = None,
+                               highlight_cluster=None, user_label="You") -> go.Figure:
+    """Return a Plotly t-SNE scatter figure, optionally with a highlighted cold-start user point
+    or a highlighted cluster ring (for user-lookup mode).
 
     Parameters
     ----------
@@ -106,40 +112,66 @@ def build_tsne_fig_with_user(df_tsne: pd.DataFrame, user_tsne: tuple = None) -> 
         Must have columns 'x', 'y', 'Cluster' (loaded from tsne_sample_data.csv).
     user_tsne : tuple (x, y) or None
         If provided, adds a gold star marker at those coordinates.
+    highlight_cluster : int or str or None
+        If provided, adds a bright overlay trace that marks all points belonging to
+        that cluster with a larger, semi-transparent ring — useful in User Lookup tab.
+    user_label : str
+        Text label for the user marker.
     """
-    color_col = 'Cluster' if 'Cluster' in df_tsne.columns else 'cluster'
+    candidates = ['Cluster', 'cluster', 'Taste Tribe', 'Tribe']
+    color_col = next((c for c in candidates if c in df_tsne.columns), 'Cluster')
     df_tsne[color_col] = df_tsne[color_col].astype(str)
     
     fig = px.scatter(
         df_tsne, x='x', y='y', color=color_col,
-        title='Taste Tribes (t-SNE 2D Projection)',
+        # title='Taste Tribes (t-SNE 2D Projection)', # Removed title to avoid overlap with legend
         opacity=0.6,
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig.update_layout(
+        showlegend=True,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family='Inter, sans-serif', size=12, color='#FFF'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1,
-                    font=dict(family='Inter, sans-serif', size=10, color='#FFF')),
-        margin=dict(l=0, r=0, t=40, b=0)
+        legend=dict(
+            orientation='h', 
+            yanchor='bottom', y=1.05, 
+            xanchor='center', x=0.5,
+            font=dict(family='Inter, sans-serif', size=11, color='#FFF')
+        ),
+        margin=dict(l=0, r=0, t=50, b=0)
     )
+    # Highlight a specific cluster (User Lookup mode)
+    if highlight_cluster is not None:
+        mask = df_tsne[color_col] == str(highlight_cluster)
+        df_hi = df_tsne[mask]
+        if not df_hi.empty:
+            fig.add_trace(go.Scatter(
+                x=df_hi['x'], y=df_hi['y'],
+                mode='markers',
+                marker=dict(symbol='circle-open', size=14, color='#FFD700',
+                            line=dict(color='#FFD700', width=2)),
+                name=f'Tribe {highlight_cluster} (User)', showlegend=True
+            ))
+    # User star point (Lookup or Cold-start)
     if user_tsne is not None:
         fig.add_trace(go.Scatter(
             x=[user_tsne[0]], y=[user_tsne[1]],
             mode='markers+text',
-            marker=dict(symbol='star', size=18, color='#FFD700',
-                        line=dict(color='#FF4500', width=2)),
-            text=['You'], textposition='top center',
+            marker=dict(symbol='star', size=24, color='#FFD700',
+                        line=dict(color='#FF4500', width=3)),
+            text=[user_label], textposition='top center',
             textfont=dict(color='#FFD700', size=13),
-            name='You (Cold-Start)',
+            name='You',
             showlegend=True
         ))
     return fig
 
 
-def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None) -> go.Figure:
-    """Return a Plotly PCA 3D scatter figure, optionally with a highlighted cold-start user point.
+def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None,
+                                highlight_cluster=None, user_label="You") -> go.Figure:
+    """Return a Plotly PCA 3D scatter figure, optionally with a highlighted cold-start user point
+    or a highlighted cluster ring (for user-lookup mode).
 
     Parameters
     ----------
@@ -147,8 +179,13 @@ def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None) 
         Must have columns 'x', 'y', 'z', 'Cluster' (loaded from pca3d_sample.parquet).
     user_pca3d : tuple (x, y, z) or None
         If provided, adds a gold diamond marker at those coordinates.
+    highlight_cluster : int or str or None
+        If provided, adds a bright overlay trace for all points of that cluster.
+    user_label : str
+        Text label for the user marker.
     """
-    color_col = 'Cluster' if 'Cluster' in df_pca3d.columns else 'cluster'
+    candidates = ['Cluster', 'cluster', 'Taste Tribe', 'Tribe']
+    color_col = next((c for c in candidates if c in df_pca3d.columns), 'Cluster')
     df_pca3d[color_col] = df_pca3d[color_col].astype(str)
 
     fig_3d = px.scatter_3d(
@@ -180,15 +217,28 @@ def build_pca3d_fig_with_user(df_pca3d: pd.DataFrame, user_pca3d: tuple = None) 
             )
         )
     )
+    # Highlight a specific cluster (User Lookup mode)
+    if highlight_cluster is not None:
+        mask = df_pca3d[color_col] == str(highlight_cluster)
+        df_hi = df_pca3d[mask]
+        if not df_hi.empty:
+            fig_3d.add_trace(go.Scatter3d(
+                x=df_hi['x'], y=df_hi['y'], z=df_hi['z'],
+                mode='markers',
+                marker=dict(symbol='circle-open', size=6, color='#FFD700',
+                            line=dict(color='#FFD700', width=2)),
+                name=f'Tribe {highlight_cluster} (User)', showlegend=True
+            ))
+    # User diamond point (Lookup or Cold-start)
     if user_pca3d is not None:
         fig_3d.add_trace(go.Scatter3d(
             x=[user_pca3d[0]], y=[user_pca3d[1]], z=[user_pca3d[2]],
             mode='markers+text',
-            marker=dict(symbol='diamond', size=7, color='#FFD700',
-                        line=dict(color='#FF4500', width=2)),
-            text=['You'], textposition='top center',
+            marker=dict(symbol='diamond', size=12, color='#FFD700',
+                        line=dict(color='#FF4500', width=3)),
+            text=[user_label], textposition='top center',
             textfont=dict(color='#FFD700', size=13),
-            name='You (Cold-Start)',
+            name='You',
             showlegend=True
         ))
     return fig_3d
